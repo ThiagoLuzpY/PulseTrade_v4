@@ -1,0 +1,57 @@
+{
+  "project_name": "Smart Trader",
+  "theme": "dark",
+  "archetype": "Archetype 2: The Performance Pro (Command Center / Trading Terminal)",
+  "typography": {
+    "headings": "Chivo",
+    "body": "IBM Plex Sans",
+    "numbers_and_data": "JetBrains Mono",
+    "rules": "Never use Inter or Roboto for headings. Use JetBrains Mono or similar monospaced fonts for all tickers, prices, percentages, and countdowns to ensure tabular alignment. Headings should be tight (tracking-tight), and uppercase overlines (tracking-[0.2em]) should be used for labels like 'STOP LOSS' or 'ENTRY'."
+  },
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "surface_hover": "#1E1E1E",
+    "primary": "#007AFF",
+    "accent_long": "#00C853",
+    "accent_short": "#FF3B30",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "border": "#27272A",
+    "rules": "Pure #000000 or close variants for background. NO full-screen gradients. Data drives color: only use Green/Red for market direction. Do NOT use teal or purple. Text contrast must be APCA compliant."
+  },
+  "layout_spacing": {
+    "grid_mode": "MODE B: THE CONTROL ROOM GRID",
+    "spacing_scale": "Dense and compact. p-4 to p-6 inside cards. Gap strategy: gap-4 or gap-6 for tight correlation of data.",
+    "borders_and_surfaces": "Cardless or sharp rectangular cards. 1px solid border (#27272A). Max 4px border-radius (rounded-sm) to keep a technical, precise feel. No soft shadows. Use 'Grid Borders' strategy for data tables.",
+    "rules": "Every pixel must be utilized. Use h-full on children to match neighbors. Optical alignment over geometric alignment."
+  },
+  "components_instructions": {
+    "scan_button": "The central focal point. Massive CTA (e.g., text-2xl, py-6). Use 'The Tracing Beam' surface strategy (Aceternity style) or a high-tech glowing border to invite interaction.",
+    "filters_panel": "Dense, top or side panel. Use Shadcn Select and Inputs customized with square edges and high-contrast focus states (focus:ring-primary).",
+    "signal_card": "Hero widget. Highlight LONG (Volt Green) or SHORT (Electric Red) with bold badges. Massive typography for Entry Price. Clear visual grid for Stop Loss, Take Profit, and Leverage. Include a monospaced countdown for 'hora exata de entrada'.",
+    "technical_justification": "Text block with low-contrast background (e.g., bg-white/5) and text-secondary, looking like a raw system log or terminal output.",
+    "charts": "MUST use 'lightweight-charts' for real-time candlestick rendering. Configure chart background to 'transparent' to blend with surface (#141414), grid lines to #27272A, and candlestick colors to match accent_long/accent_short.",
+    "history_list": "Dense table or narrow list view. Use Grid Borders (border-b border-border/40).",
+    "ticker_marquee": "Use react-fast-marquee. 'The Editorial Ribbon' / Data Stream style. Placed at the very top or bottom. Deep black background, monospaced text, neon green/red highlights for percentages. Slow, smooth drift.",
+    "icons": "Use Phosphor Icons (@phosphor-icons/react) for interface. Use react-icons/si (SiBinance, SiBytedance for Bybit) for exchange logos."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Crisp. Background brightens slightly, borders illuminate (border-white/20). Explicitly set hover:text-white.",
+    "scanning_animation": "When 'Varrer Mercado' is active, implement a 'Retro-Futurism' scanning effect: fast-shuffling ASCII characters or a glowing radar/progress line before the signal locks in.",
+    "accessibility": "Respect prefers-reduced-motion. High contrast focus rings on all inputs."
+  },
+  "media_urls": [
+    {
+      "category": "app_background",
+      "url": "https://static.prod-images.emergentagent.com/jobs/73789d9b-63a3-4075-aa31-890877bf2064/images/16ec30f9ab2976a21f31da868d88515c677a64702252bb2e38264b6820561e46.png",
+      "description": "Abstract dark tech texture. Use as a fixed background with very low opacity (10-15%) or blend-mode over the deep obsidian base to kill digital flatness."
+    },
+    {
+      "category": "empty_state_graphic",
+      "url": "https://images.unsplash.com/photo-1516245834210-c4c142787335?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwyfHxCaXRjb2luJTIwY3J5cHRvJTIwdHJhZGluZyUyMGFic3RyYWN0JTIwZGFya3xlbnwwfHx8fDE3Nzg5MDcwNDZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Use as a muted, dark background for the 'Awaiting Scan' empty state area inside the Signal Card. Overlay with heavy black/80."
+    }
+  ],
+  "testing_instructions": "All interactive and key informational elements MUST include a data-testid attribute. Applies to buttons, links, form inputs, menus, error messages, user balances, confirmation text, scan button, signal card values. Convention: kebab-case, role-based."
+}
