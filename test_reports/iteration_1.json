@@ -1,0 +1,39 @@
+{
+  "summary": "End-to-end backend testing of PULSE Smart Trader. All 12 pytest cases passed (100%). Covered: root health, movers (OKX futures + Binance spot via vision mirror), klines (OKX futures BTCUSDT 1h), POST /api/scan for both okx/futures and binance/spot with full AI enrichment, entry_time >=3 min in future (validated 5min target), Portuguese justification heuristic, signal persistence in Mongo, latest-first ordering, no _id leak, DELETE flow, and Pydantic minutes_to_entry validation. Additional smoke tests for scalp (5m) and long (4h) timeframes also worked end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pulse_backend.py",
+    "/app/test_reports/pytest/pulse_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "scanner.py uses asyncio.Semaphore(8) — each /api/scan still fires ~25 outbound HTTPX requests; consider symbol caching to reduce latency and 3rd-party rate-limit risk.",
+    "server.py mounts CORSMiddleware AFTER app.include_router(api_router). FastAPI middleware should normally be added before include_router; works today but is brittle.",
+    "server.py uses deprecated @app.on_event('shutdown'); migrate to lifespan handler.",
+    "DELETE /api/signals/{id} always returns 200 even when id not found (deleted=0). Consider 404 for nonexistent ids to match REST norms (current behavior was tested as-is).",
+    "ai_analyst.py: code-fence stripping is fragile (text.strip('`') strips ALL backticks). Use regex or json extraction for robustness.",
+    "indicators.py: ema200 uses min(200, len-1) which means with ~200 klines the EMA200 is effectively EMA199 — acceptable but document.",
+    "No automated test cleanup of inserted scan signals beyond the two deleted in tests; the GET /api/signals collection will grow during repeated test runs (low priority)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pulse_backend.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "N/A (skipped per request)"
+  },
+  "test_credentials": "N/A — app has no auth",
+  "seed_data_creation": "Two live signals were inserted by /api/scan during the test run; one (binance spot) was deleted by test_delete_signal_removes_it. The okx futures signal from the persistence test remains in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All backend endpoints are green. Public URL works. Scan takes 4-15s due to LLM + 25 klines fetches; use timeout >= 60s. OKX futures + Binance Spot are the only supported (exchange, market_type) pairs — Binance Futures and Bybit are geo-blocked and intentionally not exposed. To test frontend, start at the SCAN button on /, expect signal card with Portuguese justification.",
+  "rca of the issue": "N/A — no defects found."
+}
