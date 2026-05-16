@@ -26,33 +26,10 @@ async def _scan_symbol(exchange: str, market_type: str, symbol: str, interval: s
         return None
 
 
-async def scan_market(exchange: str, market_type: str, timeframe: str, max_symbols: int = 25) -> Dict[str, Any] | None:
-    cfg = TIMEFRAME_CONFIG.get(timeframe, TIMEFRAME_CONFIG["short"])
-    top = await get_top_symbols(exchange, market_type, limit=max_symbols)
-    if not top:
-        return None
-
-    # Concurrent scan with limited parallelism
-    sem = asyncio.Semaphore(8)
-
-    async def task(symbol: str):
-        async with sem:
-            return await _scan_symbol(exchange, market_type, symbol, cfg["interval"], cfg["kline_limit"])
-
-    results = await asyncio.gather(*[task(t["symbol"]) for t in top])
-    results = [r for r in results if r and r["direction"] != "NEUTRAL"]
-    if not results:
-        return None
-
-    # Best by score
-    results.sort(key=lambda r: r["score"], reverse=True)
-    best = results[0]
-
-    # Build trade plan using ATR
+def _build_candidate(best: Dict[str, Any], cfg: Dict[str, Any], exchange: str, market_type: str, timeframe: str) -> Dict[str, Any]:
     price = best["price"]
     atr_v = best["atr"]
     direction = best["direction"]
-
     if direction == "LONG":
         entry = price
         stop_loss = entry - atr_v * cfg["sl_atr"]
@@ -61,9 +38,7 @@ async def scan_market(exchange: str, market_type: str, timeframe: str, max_symbo
         entry = price
         stop_loss = entry + atr_v * cfg["sl_atr"]
         take_profit = entry - atr_v * cfg["tp_atr"]
-
     rr = abs(take_profit - entry) / max(abs(entry - stop_loss), 1e-9)
-
     return {
         "symbol": best["symbol"],
         "exchange": exchange,
@@ -93,3 +68,31 @@ async def scan_market(exchange: str, market_type: str, timeframe: str, max_symbo
         },
         "klines": best["klines"],
     }
+
+
+async def scan_market(exchange: str, market_type: str, timeframe: str, max_symbols: int = 25) -> Dict[str, Any] | None:
+    """Return the single best opportunity (kept for backwards compatibility / tests)."""
+    candidates = await scan_market_top_n(exchange, market_type, timeframe, n=1, max_symbols=max_symbols)
+    return candidates[0] if candidates else None
+
+
+async def scan_market_top_n(exchange: str, market_type: str, timeframe: str, n: int = 3, max_symbols: int = 25) -> List[Dict[str, Any]]:
+    """Return the top N opportunities ranked by confluence score."""
+    cfg = TIMEFRAME_CONFIG.get(timeframe, TIMEFRAME_CONFIG["short"])
+    top = await get_top_symbols(exchange, market_type, limit=max_symbols)
+    if not top:
+        return []
+
+    sem = asyncio.Semaphore(8)
+
+    async def task(symbol: str):
+        async with sem:
+            return await _scan_symbol(exchange, market_type, symbol, cfg["interval"], cfg["kline_limit"])
+
+    results = await asyncio.gather(*[task(t["symbol"]) for t in top])
+    results = [r for r in results if r and r["direction"] != "NEUTRAL"]
+    if not results:
+        return []
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return [_build_candidate(r, cfg, exchange, market_type, timeframe) for r in results[:n]]

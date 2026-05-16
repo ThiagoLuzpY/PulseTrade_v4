@@ -53,6 +53,7 @@ export const SignalCard = ({ signal }) => {
   const dirBg = isLong ? "bg-long/15 border-long/40" : "bg-short/15 border-short/40";
   const Icon = isLong ? ArrowUpRight : ArrowDownRight;
   const confColor = signal.confidence === "ALTA" ? "text-long" : signal.confidence === "BAIXA" ? "text-short" : "text-yellow-400";
+  const confLabel = signal.confidence ? `${signal.confidence} · ${signal.score}/100` : `aguardando IA · ${signal.score}/100`;
 
   return (
     <div data-testid="signal-card" className="relative border border-border rounded-sm bg-surface/80 backdrop-blur-sm overflow-hidden">
@@ -95,7 +96,7 @@ export const SignalCard = ({ signal }) => {
         </div>
         <div className="flex flex-col gap-1">
           <span className="overline flex items-center gap-1"><ShieldCheck size={11} weight="bold" /> CONFIANÇA</span>
-          <span data-testid="signal-confidence" className={`font-mono text-base ${confColor}`}>{signal.confidence} · {signal.score}/100</span>
+          <span data-testid="signal-confidence" className={`font-mono text-base ${signal.confidence ? confColor : "text-muted-foreground"}`}>{confLabel}</span>
         </div>
         <div className="flex flex-col gap-1">
           <span className="overline flex items-center gap-1"><Target size={11} weight="bold" /> NÍVEL-CHAVE</span>
@@ -109,9 +110,16 @@ export const SignalCard = ({ signal }) => {
           <span className="overline">análise técnica · ia</span>
           <div className="flex-1 h-px bg-border" />
         </div>
-        <div data-testid="signal-justification" className="terminal p-3 rounded-sm">
-          <span className="text-electric">$</span> {signal.justification}
-        </div>
+        {signal.justification ? (
+          <div data-testid="signal-justification" className="terminal p-3 rounded-sm">
+            <span className="text-electric">$</span> {signal.justification}
+          </div>
+        ) : (
+          <div data-testid="signal-justification-pending" className="terminal p-3 rounded-sm flex items-center gap-2 text-zinc-500">
+            <span className="size-1.5 rounded-full bg-electric animate-pulse" />
+            <span>aguardando análise da IA… clique no chip acima ou aguarde alguns segundos.</span>
+          </div>
+        )}
         {signal.alert && (
           <div data-testid="signal-alert" className="flex items-start gap-2 text-xs text-yellow-300/90">
             <WarningCircle size={14} weight="bold" className="mt-0.5 flex-none" />

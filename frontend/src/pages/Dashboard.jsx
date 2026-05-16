@@ -8,6 +8,7 @@ import ScanButton from "@/components/ScanButton";
 import SignalCard from "@/components/SignalCard";
 import PriceChart from "@/components/PriceChart";
 import HistoryList from "@/components/HistoryList";
+import CandidatesBar from "@/components/CandidatesBar";
 
 const DEFAULT_FILTERS = {
   exchange: "okx",
@@ -19,8 +20,9 @@ const DEFAULT_FILTERS = {
 export default function Dashboard() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [loading, setLoading] = useState(false);
-  const [signal, setSignal] = useState(null);
-  const [klines, setKlines] = useState([]);
+  const [candidates, setCandidates] = useState([]); // up to 3
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [enrichingIdx, setEnrichingIdx] = useState(null);
   const [history, setHistory] = useState([]);
 
   const loadHistory = async () => {
@@ -34,15 +36,20 @@ export default function Dashboard() {
 
   const handleScan = async () => {
     setLoading(true);
-    setSignal(null);
-    setKlines([]);
+    setCandidates([]);
+    setSelectedIdx(0);
+    setEnrichingIdx(null);
     toast.loading("Varrendo mercado…", { id: "scan", description: `${filters.exchange.toUpperCase()} · ${filters.market_type} · ${filters.timeframe}` });
     try {
       const data = await api.scan(filters);
-      const { klines: kl, ...sig } = data;
-      setSignal(sig);
-      setKlines(kl || []);
-      toast.success(`Oportunidade encontrada: ${sig.symbol} ${sig.direction}`, { id: "scan" });
+      const list = data.candidates || [];
+      setCandidates(list);
+      setSelectedIdx(0);
+      if (list.length === 1) {
+        toast.success(`Oportunidade: ${list[0].symbol} ${list[0].direction}`, { id: "scan" });
+      } else if (list.length > 1) {
+        toast.success(`${list.length} oportunidades — top: ${list[0].symbol} ${list[0].direction}`, { id: "scan" });
+      }
       loadHistory();
     } catch (e) {
       const msg = e?.response?.data?.detail || e.message || "Falha ao varrer mercado";
@@ -52,11 +59,34 @@ export default function Dashboard() {
     }
   };
 
+  const handleSelectCandidate = async (idx) => {
+    if (idx === selectedIdx) return;
+    setSelectedIdx(idx);
+    const c = candidates[idx];
+    if (!c || c.ai_enriched) return;
+    // Enrich on demand
+    setEnrichingIdx(idx);
+    toast.loading("Analisando com IA…", { id: "enrich", description: `${c.symbol} ${c.direction}` });
+    try {
+      const enriched = await api.enrich(c);
+      setCandidates((prev) => prev.map((x, i) => (i === idx ? { ...enriched } : x)));
+      toast.success(`Análise pronta: ${enriched.symbol}`, { id: "enrich" });
+      loadHistory();
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e.message || "Erro ao analisar com IA";
+      toast.error(msg, { id: "enrich" });
+    } finally {
+      setEnrichingIdx(null);
+    }
+  };
+
   const handleSelectHistory = async (s) => {
-    setSignal(s);
+    // Treat history item as a single candidate selection
     try {
       const data = await api.klines({ exchange: s.exchange, market_type: s.market_type, symbol: s.symbol, interval: s.interval, limit: 200 });
-      setKlines(data.klines || []);
+      const single = { ...s, ai_enriched: true, klines: data.klines || [] };
+      setCandidates([single]);
+      setSelectedIdx(0);
     } catch (e) { /* silent */ }
   };
 
@@ -64,8 +94,9 @@ export default function Dashboard() {
     await api.deleteSignal(s.id);
     toast.success("Sinal removido");
     loadHistory();
-    if (signal?.id === s.id) { setSignal(null); setKlines([]); }
   };
+
+  const signal = candidates[selectedIdx] || null;
 
   const subtitle = useMemo(() => {
     const map = { scalp: "scalp · 5min", short: "curto prazo · 1h", long: "longo prazo · 4h" };
@@ -110,6 +141,16 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {/* Candidates bar */}
+        {candidates.length > 0 && (
+          <CandidatesBar
+            candidates={candidates}
+            selectedIdx={selectedIdx}
+            onSelect={handleSelectCandidate}
+            enrichingIdx={enrichingIdx}
+          />
+        )}
+
         {/* Signal + Chart */}
         <section className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-3">
@@ -117,7 +158,7 @@ export default function Dashboard() {
           </div>
           <div className="lg:col-span-2 min-h-[420px]">
             <PriceChart
-              klines={klines}
+              klines={signal?.klines || []}
               symbol={signal?.symbol}
               direction={signal?.direction}
               entry={signal?.entry}

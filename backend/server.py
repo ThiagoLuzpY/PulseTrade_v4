@@ -11,7 +11,7 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 from market_data import get_top_symbols, get_klines, get_movers
-from scanner import scan_market
+from scanner import scan_market, scan_market_top_n
 from ai_analyst import enrich_signal
 
 
@@ -122,52 +122,103 @@ async def symbols(
 
 @api_router.post("/scan")
 async def scan(req: ScanRequest):
-    try:
-        result = await scan_market(req.exchange, req.market_type, req.timeframe)
-        if not result:
-            raise HTTPException(status_code=404, detail="Nenhuma oportunidade encontrada agora. Tente outro mercado ou timeframe.")
+    """Run a market scan and return up to 3 best opportunities.
 
-        # Strip klines before AI call to save tokens; keep separately
-        klines_data = result.pop("klines", [])
-        result = await enrich_signal(result)
+    Only the first (top-ranked) candidate is enriched by the AI to keep response time
+    low. Other candidates have null AI fields and can be enriched on demand via
+    /api/enrich.
+    """
+    try:
+        results = await scan_market_top_n(req.exchange, req.market_type, req.timeframe, n=3)
+        if not results:
+            raise HTTPException(status_code=404, detail="Nenhuma oportunidade encontrada agora. Tente outro mercado ou timeframe.")
 
         now = datetime.now(timezone.utc)
         entry_time = now + timedelta(minutes=req.minutes_to_entry)
 
-        signal = {
-            "id": str(uuid.uuid4()),
-            "symbol": result["symbol"],
-            "exchange": result["exchange"],
-            "market_type": result["market_type"],
-            "timeframe": result["timeframe"],
-            "interval": result["interval"],
-            "direction": result["direction"],
-            "score": result["score"],
-            "entry": result["entry"],
-            "stop_loss": result["stop_loss"],
-            "take_profit": result["take_profit"],
-            "risk_reward": result["risk_reward"],
-            "leverage_suggestion": result["leverage_suggestion"],
-            "horizon": result["horizon"],
-            "entry_time": entry_time.isoformat(),
-            "indicators": result["indicators"],
-            "justification": result.get("justification", ""),
-            "confidence": result.get("confidence", "MEDIA"),
-            "key_level": result.get("key_level", ""),
-            "alert": result.get("alert", ""),
-            "created_at": now.isoformat(),
-        }
+        candidates = []
+        for idx, raw in enumerate(results):
+            klines_data = raw.pop("klines", [])
+            # Only enrich the top candidate via AI (cheaper + faster).
+            if idx == 0:
+                raw = await enrich_signal(raw)
+                justification = raw.get("justification", "")
+                confidence = raw.get("confidence", "MEDIA")
+                key_level = raw.get("key_level", "")
+                alert = raw.get("alert", "")
+                ai_enriched = True
+            else:
+                justification, confidence, key_level, alert = "", "", "", ""
+                ai_enriched = False
 
-        # Persist
-        await db.signals.insert_one({**signal})
+            candidate = {
+                "id": str(uuid.uuid4()),
+                "symbol": raw["symbol"],
+                "exchange": raw["exchange"],
+                "market_type": raw["market_type"],
+                "timeframe": raw["timeframe"],
+                "interval": raw["interval"],
+                "direction": raw["direction"],
+                "score": raw["score"],
+                "entry": raw["entry"],
+                "stop_loss": raw["stop_loss"],
+                "take_profit": raw["take_profit"],
+                "risk_reward": raw["risk_reward"],
+                "leverage_suggestion": raw["leverage_suggestion"],
+                "horizon": raw["horizon"],
+                "entry_time": entry_time.isoformat(),
+                "indicators": raw["indicators"],
+                "justification": justification,
+                "confidence": confidence,
+                "key_level": key_level,
+                "alert": alert,
+                "ai_enriched": ai_enriched,
+                "created_at": now.isoformat(),
+                "klines": klines_data,
+            }
+            candidates.append(candidate)
 
-        # Return with klines for chart
-        return {**signal, "klines": klines_data}
+        # Persist only the top candidate (the one with AI). Others are persisted
+        # later if/when the user enriches them via /api/enrich.
+        top = {k: v for k, v in candidates[0].items() if k != "klines"}
+        await db.signals.insert_one({**top})
+
+        return {"candidates": candidates}
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("scan failed")
         raise HTTPException(status_code=500, detail=f"Erro no scan: {e}")
+
+
+class EnrichRequest(BaseModel):
+    candidate: dict
+
+
+@api_router.post("/enrich")
+async def enrich_candidate(req: EnrichRequest):
+    """Run AI enrichment on a candidate the user clicked on. Persists to history."""
+    try:
+        candidate = dict(req.candidate)
+        # Keep klines aside so we don't pass them to the LLM
+        klines_data = candidate.pop("klines", [])
+        if candidate.get("ai_enriched"):
+            # Already enriched; just return as-is with klines
+            return {**candidate, "klines": klines_data}
+
+        enriched = await enrich_signal(candidate)
+        enriched["ai_enriched"] = True
+
+        # Persist a fresh history record
+        record = {k: v for k, v in enriched.items() if k != "klines"}
+        record["id"] = str(uuid.uuid4())
+        record["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.signals.insert_one({**record})
+
+        return {**enriched, "id": record["id"], "klines": klines_data}
+    except Exception as e:
+        logger.exception("enrich failed")
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar com IA: {e}")
 
 
 @api_router.get("/signals")

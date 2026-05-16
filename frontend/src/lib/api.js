@@ -10,6 +10,7 @@ export const api = {
     http.get("/movers", { params: { exchange, market_type, top } }).then((r) => r.data),
   klines: (params) => http.get("/klines", { params }).then((r) => r.data),
   scan: (payload) => http.post("/scan", payload).then((r) => r.data),
+  enrich: (candidate) => http.post("/enrich", { candidate }).then((r) => r.data),
   signals: (limit = 50) => http.get("/signals", { params: { limit } }).then((r) => r.data),
   deleteSignal: (id) => http.delete(`/signals/${id}`).then((r) => r.data),
 };
