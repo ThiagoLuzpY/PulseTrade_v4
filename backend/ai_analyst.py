@@ -17,8 +17,11 @@ SYSTEM_PROMPT = (
 
 
 async def enrich_signal(signal: Dict[str, Any]) -> Dict[str, Any]:
-    """Add AI-generated justification, confidence, and final notes to a signal."""
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    """Add AI-generated justification, confidence, and final notes to a signal.
+
+    Prefer the user's own OPENAI_API_KEY when present; fallback to EMERGENT_LLM_KEY.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
         signal["justification"] = "Análise técnica algorítmica (IA desativada)."
         signal["confidence"] = "MEDIA"
