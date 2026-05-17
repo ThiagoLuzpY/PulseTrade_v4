@@ -158,6 +158,7 @@ export default function Dashboard() {
           </div>
           <div className="lg:col-span-2 min-h-[420px]">
             <PriceChart
+              key={signal?.symbol || "empty"}
               klines={signal?.klines || []}
               symbol={signal?.symbol}
               direction={signal?.direction}
